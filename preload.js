@@ -8,4 +8,9 @@ contextBridge.exposeInMainWorld('tvAPI', {
   getShortcutLogFile: () => ipcRenderer.invoke('app:get-shortcut-log-file'),
   goHome: () => ipcRenderer.invoke('app:go-home'),
   viewerLogEvent: (payload) => ipcRenderer.invoke('viewer:log-event', payload),
+  onAppMenuToggle: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on('app-menu:toggle', listener);
+    return () => ipcRenderer.removeListener('app-menu:toggle', listener);
+  },
 });

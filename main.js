@@ -119,7 +119,7 @@ function applyFullscreenState(win, fullscreen) {
     win.setFullScreen(true);
   } else {
     win.setFullScreen(false);
-    win.setBounds({ x: 0, y: 0, width: 1600, height: 900 });
+    win.setBounds(getWindowedBounds());
     win.show();
     win.focus();
   }
@@ -197,6 +197,10 @@ function handleShortcutAction(action, accelerator) {
   }
   if (action === ACTIONS.TOGGLE_FULLSCREEN) {
     toggleFullscreenMode({ accelerator, source: 'global-shortcut' });
+    return;
+  }
+  if (action === ACTIONS.TOGGLE_APP_MENU && mainWindow) {
+    mainWindow.webContents.send('app-menu:toggle');
   }
 }
 
@@ -207,18 +211,38 @@ function registerGlobalShortcuts() {
   });
 }
 
+function getPreferredDisplay() {
+  return screen.getAllDisplays().find((d) => !d.internal) || screen.getPrimaryDisplay();
+}
+
+function getWindowedBounds() {
+  const display = getPreferredDisplay();
+  const area = display.workArea;
+  const width = Math.min(1600, area.width);
+  const height = Math.min(900, area.height);
+
+  return {
+    x: Math.round(area.x + (area.width - width) / 2),
+    y: Math.round(area.y + (area.height - height) / 2),
+    width,
+    height,
+  };
+}
+
 function createWindow() {
   fs.mkdirSync(app.getPath('userData'), { recursive: true });
-  const externalDisplay = screen.getAllDisplays().find((d) => !d.internal);
+  const display = getPreferredDisplay();
+  const displayArea = fullscreen => fullscreen ? display.bounds : getWindowedBounds();
   const mode = readWindowMode();
   const fullscreen = mode.fullscreen !== false;
+  const bounds = displayArea(fullscreen);
 
   mainWindow = new BrowserWindow({
     title: 'Lampa Wrapper',
-    x: externalDisplay ? externalDisplay.bounds.x : undefined,
-    y: externalDisplay ? externalDisplay.bounds.y : undefined,
-    width: externalDisplay ? externalDisplay.bounds.width : 1600,
-    height: externalDisplay ? externalDisplay.bounds.height : 900,
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
     show: true,
     frame: !fullscreen,
     autoHideMenuBar: fullscreen,
@@ -255,8 +279,7 @@ function createWindow() {
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   if (fullscreen) setTimeout(() => applyFullscreenState(mainWindow, true), 300);
   else {
-    mainWindow.setBounds({ x: 80, y: 80, width: 1600, height: 900 });
-    mainWindow.center();
+    mainWindow.setBounds(getWindowedBounds());
     mainWindow.show();
     mainWindow.focus();
   }

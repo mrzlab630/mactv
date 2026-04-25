@@ -9,8 +9,7 @@
 <body class="viewer-body">
   <div id="loader" class="loader-overlay">
     <div class="loader-spinner"></div>
-    <div class="loader-text">Запускаем локальную Lampa...</div>
-    <div id="statusText" class="url-label">Проверяем http://127.0.0.1:8099/</div>
+    <div id="statusText" class="loader-text">Запускаем локальную Lampa...</div>
   </div>
 
   <div id="errorBox" class="loader-overlay hidden">
@@ -22,7 +21,28 @@
     </div>
   </div>
 
-  <webview id="webview" class="webview hidden" allowpopups partition="persist:lampa"></webview>
+  <webview id="lampaWebview" class="webview hidden" allowpopups partition="persist:lampa"></webview>
+  <webview id="youtubeWebview" class="webview hidden" allowpopups partition="persist:youtube"></webview>
+  <webview id="kinopoiskWebview" class="webview hidden" allowpopups partition="persist:kinopoisk"></webview>
+
+  <div id="appMenu" class="app-menu hidden" aria-hidden="true">
+    <div class="app-menu-panel" role="dialog" aria-modal="true">
+      <div class="app-menu-grid" role="listbox" aria-label="Выбор приложения">
+        <button class="app-menu-tile selected" data-app="lampa" role="option" aria-selected="true">
+          <span class="app-menu-icon">L</span>
+          <span class="app-menu-name">Lampa</span>
+        </button>
+        <button class="app-menu-tile" data-app="youtube" role="option" aria-selected="false">
+          <span class="app-menu-icon app-menu-icon-youtube">▶</span>
+          <span class="app-menu-name">YouTube</span>
+        </button>
+        <button class="app-menu-tile" data-app="kinopoisk" role="option" aria-selected="false">
+          <span class="app-menu-icon app-menu-icon-kinopoisk">К</span>
+          <span class="app-menu-name">Кинопоиск</span>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <script src="shortcuts.js"></script>
   <script src="renderer.js"></script>

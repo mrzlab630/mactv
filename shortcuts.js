@@ -10,10 +10,13 @@
 
   const ACTIONS = Object.freeze({
     QUIT: 'quit',
+    TOGGLE_APP_MENU: 'toggle-app-menu',
     TOGGLE_FULLSCREEN: 'toggle-fullscreen',
   });
 
   const GLOBAL_SHORTCUTS = Object.freeze([
+    { accelerator: 'F8', action: ACTIONS.TOGGLE_APP_MENU },
+    { accelerator: 'Shift+8', action: ACTIONS.TOGGLE_APP_MENU },
     { accelerator: 'F9', action: ACTIONS.QUIT },
     { accelerator: 'Shift+9', action: ACTIONS.QUIT },
     { accelerator: 'F10', action: ACTIONS.TOGGLE_FULLSCREEN },
@@ -53,6 +56,9 @@
   }
 
   function getShortcutAction(input) {
+    if (isFunctionKey(input, 'F8') || isShiftDigit(input, 8, '*')) {
+      return ACTIONS.TOGGLE_APP_MENU;
+    }
     if (isFunctionKey(input, 'F9') || isShiftDigit(input, 9, '(')) {
       return ACTIONS.QUIT;
     }
