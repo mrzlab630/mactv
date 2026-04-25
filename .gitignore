@@ -1,0 +1,23 @@
+.DS_Store
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Runtime logs
+*.log
+tvlauncher.stdout.log
+tvlauncher.stderr.log
+
+# Local runtime state
+proxy-runtime/config.json
+proxy-runtime/state.json
+proxy-runtime/*.pid
+proxy-runtime/*.log
+proxy-runtime/v2ray
+
+# OS/editor noise
+.idea/
+.vscode/

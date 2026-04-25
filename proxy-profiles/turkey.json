@@ -1,0 +1,92 @@
+{
+  "log": {
+    "loglevel": "info"
+  },
+  "inbounds": [
+    {
+      "listen": "127.0.0.1",
+      "protocol": "socks",
+      "settings": {
+        "udp": false,
+        "auth": "noauth"
+      },
+      "port": "1080"
+    },
+    {
+      "listen": "127.0.0.1",
+      "protocol": "http",
+      "settings": {
+        "timeout": 360
+      },
+      "port": "1087"
+    }
+  ],
+  "outbounds": [
+    {
+      "mux": {
+        "enabled": false,
+        "concurrency": 8
+      },
+      "protocol": "vless",
+      "streamSettings": {
+        "tcpSettings": {
+          "header": {
+            "type": "none"
+          }
+        },
+        "security": "reality",
+        "realitySettings": {
+          "spiderX": "",
+          "publicKey": "TFXcOBO_xucwxI6cWmh92AUwQWlDMXNTCf9e9F4FKHA",
+          "show": true,
+          "serverName": "www.microsoft.com",
+          "shortId": "37659080c2c0baa6",
+          "fingerprint": "chrome"
+        },
+        "network": "tcp"
+      },
+      "tag": "proxy",
+      "settings": {
+        "vnext": [
+          {
+            "address": "89.252.191.50",
+            "users": [
+              {
+                "encryption": "none",
+                "id": "baf54b0b-86b6-4aa2-a6db-ee2804f3860f",
+                "level": 0,
+                "flow": "xtls-rprx-vision"
+              }
+            ],
+            "port": 10000
+          }
+        ]
+      }
+    },
+    {
+      "tag": "direct",
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIP",
+        "userLevel": 0
+      }
+    },
+    {
+      "tag": "block",
+      "protocol": "blackhole",
+      "settings": {
+        "response": {
+          "type": "none"
+        }
+      }
+    }
+  ],
+  "dns": {},
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [],
+    "balancers": []
+  },
+  "profileName": "turkey",
+  "name": "Turkey VLESS"
+}

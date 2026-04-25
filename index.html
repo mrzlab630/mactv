@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Lampa Wrapper</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="viewer-body">
+  <div id="loader" class="loader-overlay">
+    <div class="loader-spinner"></div>
+    <div class="loader-text">Запускаем локальную Lampa...</div>
+    <div id="statusText" class="url-label">Проверяем http://127.0.0.1:8099/</div>
+  </div>
+
+  <div id="errorBox" class="loader-overlay hidden">
+    <div class="loader-text">Lampa не запустилась</div>
+    <div id="errorText" class="url-label">Попробуй перезапуск</div>
+    <div style="display:flex;gap:12px;">
+      <button id="retryBtn">Повторить</button>
+      <button id="restartBtn">Перезапустить app</button>
+    </div>
+  </div>
+
+  <webview id="webview" class="webview hidden" allowpopups partition="persist:lampa"></webview>
+
+  <script src="shortcuts.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

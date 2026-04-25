@@ -1,0 +1,91 @@
+{
+  "name": "NY VLESS",
+  "log": {
+    "loglevel": "info"
+  },
+  "inbounds": [
+    {
+      "listen": "127.0.0.1",
+      "protocol": "socks",
+      "settings": {
+        "udp": false,
+        "auth": "noauth"
+      },
+      "port": "1080"
+    },
+    {
+      "listen": "127.0.0.1",
+      "protocol": "http",
+      "settings": {
+        "timeout": 360
+      },
+      "port": "1087"
+    }
+  ],
+  "outbounds": [
+    {
+      "mux": {
+        "enabled": false,
+        "concurrency": 8
+      },
+      "protocol": "vless",
+      "streamSettings": {
+        "tcpSettings": {
+          "header": {
+            "type": "none"
+          }
+        },
+        "security": "reality",
+        "realitySettings": {
+          "publicKey": "TFXcOBO_xucwxI6cWmh92AUwQWlDMXNTCf9e9F4FKHA",
+          "show": false,
+          "serverName": "www.microsoft.com",
+          "shortId": "968ba3562e3aea25",
+          "fingerprint": "chrome",
+          "spiderX": ""
+        },
+        "network": "tcp"
+      },
+      "tag": "proxy",
+      "settings": {
+        "vnext": [
+          {
+            "address": "172.93.101.223",
+            "users": [
+              {
+                "encryption": "none",
+                "id": "52b80f89-dd01-4d75-b977-ab0c86b2f982",
+                "level": 0,
+                "flow": "xtls-rprx-vision"
+              }
+            ],
+            "port": 8443
+          }
+        ]
+      }
+    },
+    {
+      "tag": "direct",
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIP",
+        "userLevel": 0
+      }
+    },
+    {
+      "tag": "block",
+      "protocol": "blackhole",
+      "settings": {
+        "response": {
+          "type": "none"
+        }
+      }
+    }
+  ],
+  "dns": {},
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [],
+    "balancers": []
+  }
+}

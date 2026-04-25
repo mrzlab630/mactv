@@ -1,0 +1,63 @@
+{
+  "name": "tv-electron-mvp",
+  "version": "0.1.0",
+  "description": "Lampa fullscreen wrapper for macOS using Electron",
+  "main": "main.js",
+  "author": "Stepan Zadolia",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/*.test.js",
+    "autostart:install": "node scripts/autostart.js install",
+    "autostart:remove": "node scripts/autostart.js remove",
+    "autostart:status": "node scripts/autostart.js status",
+    "build:mac": "electron-builder --mac dir"
+  },
+  "build": {
+    "appId": "com.stepan.lampawrapper",
+    "productName": "Lampa Wrapper",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "viewer.html",
+      "renderer.js",
+      "viewer.js",
+      "shortcuts.js",
+      "managed-service.js",
+      "styles.css",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "TorrServer",
+        "to": "TorrServer"
+      },
+      {
+        "from": "bin",
+        "to": "bin"
+      },
+      {
+        "from": "proxy-profiles",
+        "to": "proxy-profiles"
+      },
+      {
+        "from": "proxy-runtime/config.base.json",
+        "to": "proxy-runtime/config.base.json"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.entertainment",
+      "icon": "assets/icon.icns",
+      "target": [
+        "dir"
+      ]
+    }
+  },
+  "devDependencies": {
+    "electron": "^35.1.4",
+    "electron-builder": "^24.13.3"
+  }
+}

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Viewer</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="viewer-body">
+  <div class="viewer-toolbar">
+    <button id="homeBtn">Домой (Ctrl+H)</button>
+    <button id="backBtn">Назад (Ctrl+[)</button>
+    <button id="reloadBtn">Обновить (Ctrl+R)</button>
+    <div id="urlLabel" class="url-label"></div>
+  </div>
+  <div id="loader" class="loader-overlay">
+    <div class="loader-spinner"></div>
+    <div class="loader-text">Загрузка...</div>
+  </div>
+  <webview id="webview" class="webview" allowpopups></webview>
+  <script src="viewer.js"></script>
+</body>
+</html>
