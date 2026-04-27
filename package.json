@@ -20,6 +20,7 @@
     },
     "files": [
       "main.js",
+      "profile-cleanup.js",
       "preload.js",
       "index.html",
       "viewer.html",

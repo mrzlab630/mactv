@@ -2,11 +2,17 @@ const { app, BrowserWindow, ipcMain, powerSaveBlocker, screen, globalShortcut } 
 const path = require('path');
 const fs = require('fs');
 const { ensureManagedServiceRunning, stopManagedService } = require('./managed-service');
+const { cleanObsoleteProfileData } = require('./profile-cleanup');
 const { ACTIONS, GLOBAL_SHORTCUTS } = require('./shortcuts');
 
-app.disableHardwareAcceleration();
-app.commandLine.appendSwitch('disable-gpu');
-app.commandLine.appendSwitch('disable-gpu-compositing');
+const disableGpuAcceleration = process.env.TV_ELECTRON_DISABLE_GPU === '1'
+  || process.argv.includes('--disable-gpu-rendering');
+
+if (disableGpuAcceleration) {
+  app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch('disable-gpu');
+  app.commandLine.appendSwitch('disable-gpu-compositing');
+}
 
 let mainWindow;
 let blockerId = null;
@@ -14,6 +20,7 @@ let torrServerRuntime = null;
 
 const userDataRoot = path.join(app.getPath('home'), '.openclaw', 'workspace', '.tv-electron-mvp-user-data');
 app.setPath('userData', userDataRoot);
+cleanObsoleteProfileData(userDataRoot);
 
 const localAppsDir = path.join(app.getPath('home'), '.openclaw', 'workspace', '.tv-local-apps');
 const localLampaDir = path.join(localAppsDir, 'lampa');
