@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('tvAPI', {
   restart: () => ipcRenderer.invoke('app:restart'),
   quit: () => ipcRenderer.invoke('app:quit'),
   toggleFullscreen: () => ipcRenderer.invoke('app:toggle-fullscreen'),
+  clearCache: () => ipcRenderer.invoke('app:clear-cache'),
   getShortcutLogFile: () => ipcRenderer.invoke('app:get-shortcut-log-file'),
   goHome: () => ipcRenderer.invoke('app:go-home'),
   viewerLogEvent: (payload) => ipcRenderer.invoke('viewer:log-event', payload),

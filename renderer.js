@@ -13,7 +13,7 @@ const errorText = document.getElementById('errorText');
 const retryBtn = document.getElementById('retryBtn');
 const restartBtn = document.getElementById('restartBtn');
 const appMenu = document.getElementById('appMenu');
-const appMenuTiles = Array.from(document.querySelectorAll('.app-menu-tile'));
+const appMenuItems = Array.from(document.querySelectorAll('.app-menu-item'));
 const { ACTIONS, getShortcutAction } = window.tvShortcuts;
 
 const apps = {
@@ -45,6 +45,7 @@ const apps = {
 let activeAppId = 'lampa';
 let selectedMenuIndex = 0;
 let lastMenuToggleAt = 0;
+let cacheClearInProgress = false;
 const MENU_COLUMNS = 2;
 
 function activeApp() {
@@ -103,6 +104,14 @@ function closeAppPage(appId) {
   navigateWebview(app, EMPTY_PAGE_URL);
 }
 
+function closeAllAppPages() {
+  Object.keys(apps).forEach(closeAppPage);
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function bootLampa() {
   if (activeAppId === 'lampa') showLoader('Проверяем локальную Lampa...');
   try {
@@ -156,19 +165,28 @@ function switchApp(appId) {
   loadWebApp(appId);
 }
 
+function reloadActiveApp() {
+  if (activeAppId === 'lampa') {
+    bootLampa();
+    return;
+  }
+
+  loadWebApp(activeAppId);
+}
+
 function setMenuSelection(index) {
-  selectedMenuIndex = (index + appMenuTiles.length) % appMenuTiles.length;
-  appMenuTiles.forEach((tile, tileIndex) => {
+  selectedMenuIndex = (index + appMenuItems.length) % appMenuItems.length;
+  appMenuItems.forEach((tile, tileIndex) => {
     const selected = tileIndex === selectedMenuIndex;
     tile.classList.toggle('selected', selected);
     tile.setAttribute('aria-selected', selected ? 'true' : 'false');
   });
-  appMenuTiles[selectedMenuIndex].focus();
+  appMenuItems[selectedMenuIndex].focus();
 }
 
 function syncMenuSelection(index) {
   selectedMenuIndex = index;
-  appMenuTiles.forEach((tile, tileIndex) => {
+  appMenuItems.forEach((tile, tileIndex) => {
     const selected = tileIndex === selectedMenuIndex;
     tile.classList.toggle('selected', selected);
     tile.setAttribute('aria-selected', selected ? 'true' : 'false');
@@ -176,7 +194,7 @@ function syncMenuSelection(index) {
 }
 
 function openAppMenu() {
-  selectedMenuIndex = Math.max(0, appMenuTiles.findIndex((tile) => tile.dataset.app === activeAppId));
+  selectedMenuIndex = Math.max(0, appMenuItems.findIndex((tile) => tile.dataset.app === activeAppId));
   appMenu.classList.remove('hidden');
   appMenu.setAttribute('aria-hidden', 'false');
   setMenuSelection(selectedMenuIndex);
@@ -195,6 +213,46 @@ function toggleAppMenu() {
 
   if (appMenu.classList.contains('hidden')) openAppMenu();
   else closeAppMenu();
+}
+
+async function clearCacheFromMenu() {
+  if (cacheClearInProgress) return;
+  if (typeof window.confirm === 'function' && !window.confirm('Очистить кэш приложения?')) return;
+
+  cacheClearInProgress = true;
+  closeAppMenu();
+  showLoader('Очищаем кэш...');
+  closeAllAppPages();
+
+  try {
+    await wait(150);
+    const result = await window.tvAPI.clearCache();
+    if (!result?.ok) {
+      showError(`Кэш не очищен: ${result?.reason || 'unknown error'}`);
+      return;
+    }
+
+    showLoader(`Кэш очищен. Удалено: ${result.removed || 0}`);
+    await wait(500);
+    reloadActiveApp();
+  } catch (error) {
+    console.error('cache cleanup failed', error);
+    showError(String(error?.message || error));
+  } finally {
+    cacheClearInProgress = false;
+  }
+}
+
+function runSelectedMenuItem() {
+  const item = appMenuItems[selectedMenuIndex];
+  if (item.dataset.app) {
+    switchApp(item.dataset.app);
+    return;
+  }
+
+  if (item.dataset.action === 'clear-cache') {
+    clearCacheFromMenu();
+  }
 }
 
 function handleMenuKey(e) {
@@ -231,7 +289,7 @@ function handleMenuKey(e) {
   if (e.key === 'Enter') {
     e.preventDefault();
     e.stopPropagation();
-    switchApp(appMenuTiles[selectedMenuIndex].dataset.app);
+    runSelectedMenuItem();
     return true;
   }
 
@@ -286,8 +344,11 @@ restartBtn.addEventListener('click', async () => {
   await window.tvAPI.restart();
 });
 
-appMenuTiles.forEach((tile, index) => {
-  tile.addEventListener('click', () => switchApp(tile.dataset.app));
+appMenuItems.forEach((tile, index) => {
+  tile.addEventListener('click', () => {
+    if (tile.dataset.app) switchApp(tile.dataset.app);
+    else if (tile.dataset.action === 'clear-cache') clearCacheFromMenu();
+  });
   tile.addEventListener('focus', () => syncMenuSelection(index));
 });
 

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, powerSaveBlocker, screen, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, powerSaveBlocker, screen, session, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { ensureManagedServiceRunning, stopManagedService } = require('./managed-service');
@@ -17,6 +17,7 @@ if (disableGpuAcceleration) {
 let mainWindow;
 let blockerId = null;
 let torrServerRuntime = null;
+let cleanupInProgress = false;
 
 const userDataRoot = path.join(app.getPath('home'), '.openclaw', 'workspace', '.tv-electron-mvp-user-data');
 app.setPath('userData', userDataRoot);
@@ -30,6 +31,7 @@ const localLampaPort = 8099;
 const localLampaUrl = `http://127.0.0.1:${localLampaPort}/`;
 const torrServerPort = 8090;
 const torrServerUrl = `http://127.0.0.1:${torrServerPort}/`;
+const browserPartitions = ['persist:lampa', 'persist:youtube', 'persist:kinopoisk'];
 const shortcutLogFile = path.join(userDataRoot, 'shortcut-events.log');
 const viewerLogFile = path.join(userDataRoot, 'viewer-events.log');
 const windowModeFile = path.join(userDataRoot, 'window-mode.json');
@@ -328,6 +330,26 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('app:toggle-fullscreen', () => {
     return toggleFullscreenMode({ source: 'ipc' });
+  });
+  ipcMain.handle('app:clear-cache', async () => {
+    if (cleanupInProgress) {
+      return { ok: false, reason: 'cleanup-in-progress', removed: 0, errors: [] };
+    }
+
+    cleanupInProgress = true;
+    try {
+      await Promise.all(browserPartitions.map((partition) => session.fromPartition(partition).clearCache()));
+      const results = cleanObsoleteProfileData(userDataRoot);
+      const errors = results.filter((result) => result.error);
+      return {
+        ok: errors.length === 0,
+        clearedPartitions: browserPartitions.length,
+        removed: results.filter((result) => result.removed).length,
+        errors,
+      };
+    } finally {
+      cleanupInProgress = false;
+    }
   });
 
   app.on('activate', () => {

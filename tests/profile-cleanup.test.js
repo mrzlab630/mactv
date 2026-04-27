@@ -39,6 +39,8 @@ test('recognizes only cache directories that are safe to remove', () => {
   assert.equal(isRemovableCacheDirName('IndexedDB'), false);
   assert.equal(isRemovableCacheDirName('Preferences'), false);
   assert.equal(isRemovableCacheDirName('Session Storage'), false);
+  assert.equal(isRemovableCacheDirName('Network Persistent State'), false);
+  assert.equal(isRemovableCacheDirName('Login Data'), false);
 
   assert.equal(isRemovableCommonCacheDirName('Cache'), true);
   assert.equal(isRemovableCommonCacheDirName('Code Cache'), true);
@@ -84,6 +86,8 @@ test('cleans obsolete profile data without touching persisted browser storage', 
     'IndexedDB',
     'Preferences',
     'Session Storage',
+    'Network Persistent State',
+    'Login Data',
     'ShaderCache',
     'VideoDecodeStats',
   ];
@@ -102,6 +106,8 @@ test('cleans obsolete profile data without touching persisted browser storage', 
   makeDir(path.join(root, 'Partitions', 'lampa', 'IndexedDB'));
   makeDir(path.join(root, 'Partitions', 'lampa', 'Preferences'));
   makeDir(path.join(root, 'Partitions', 'lampa', 'Session Storage'));
+  makeDir(path.join(root, 'Partitions', 'lampa', 'Network Persistent State'));
+  makeDir(path.join(root, 'Partitions', 'lampa', 'Login Data'));
   makeDir(path.join(root, 'Partitions', 'okko', 'Cookies'));
   makeDir(path.join(root, 'Partitions', 'okko', 'Local Storage'));
 
@@ -126,5 +132,19 @@ test('cleans obsolete profile data without touching persisted browser storage', 
   assert.equal(exists(root, 'Partitions', 'lampa', 'IndexedDB'), true);
   assert.equal(exists(root, 'Partitions', 'lampa', 'Preferences'), true);
   assert.equal(exists(root, 'Partitions', 'lampa', 'Session Storage'), true);
+  assert.equal(exists(root, 'Partitions', 'lampa', 'Network Persistent State'), true);
+  assert.equal(exists(root, 'Partitions', 'lampa', 'Login Data'), true);
   assert.equal(exists(root, 'Partitions', 'okko'), false);
+});
+
+test('cleanup is idempotent when cache targets were already removed', () => {
+  const root = makeTempDir();
+  makeDir(path.join(root, 'Cache'));
+
+  const first = cleanObsoleteProfileData(root);
+  const second = cleanObsoleteProfileData(root);
+
+  assert.equal(first.some((result) => result.removed), true);
+  assert.equal(second.every((result) => !result.error), true);
+  assert.equal(exists(root, 'Cache'), false);
 });

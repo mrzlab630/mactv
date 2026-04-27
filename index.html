@@ -28,17 +28,21 @@
   <div id="appMenu" class="app-menu hidden" aria-hidden="true">
     <div class="app-menu-panel" role="dialog" aria-modal="true">
       <div class="app-menu-grid" role="listbox" aria-label="Выбор приложения">
-        <button class="app-menu-tile selected" data-app="lampa" role="option" aria-selected="true">
+        <button class="app-menu-tile app-menu-item selected" data-app="lampa" role="option" aria-selected="true">
           <span class="app-menu-icon">L</span>
           <span class="app-menu-name">Lampa</span>
         </button>
-        <button class="app-menu-tile" data-app="youtube" role="option" aria-selected="false">
+        <button class="app-menu-tile app-menu-item" data-app="youtube" role="option" aria-selected="false">
           <span class="app-menu-icon app-menu-icon-youtube">▶</span>
           <span class="app-menu-name">YouTube</span>
         </button>
-        <button class="app-menu-tile" data-app="kinopoisk" role="option" aria-selected="false">
+        <button class="app-menu-tile app-menu-item" data-app="kinopoisk" role="option" aria-selected="false">
           <span class="app-menu-icon app-menu-icon-kinopoisk">К</span>
           <span class="app-menu-name">Кинопоиск</span>
+        </button>
+        <button class="app-menu-tile app-menu-item" data-action="clear-cache" role="option" aria-selected="false">
+          <span class="app-menu-icon app-menu-icon-cache">⌫</span>
+          <span class="app-menu-name">Очистить кэш</span>
         </button>
       </div>
     </div>

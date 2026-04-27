@@ -73,20 +73,35 @@ function createRendererHarness() {
     restartBtn: createElement('restartBtn'),
     appMenu: createElement('appMenu', ['hidden']),
   };
-  const tiles = ['lampa', 'youtube', 'kinopoisk'].map((appId) => ({
+  const appTiles = ['lampa', 'youtube', 'kinopoisk'].map((appId) => ({
     ...createElement(`${appId}Tile`),
     dataset: { app: appId },
   }));
+  const actionTiles = [{
+    ...createElement('clearCacheTile'),
+    dataset: { action: 'clear-cache' },
+  }];
+  const menuItems = [...appTiles, ...actionTiles];
+  let clearCacheCalls = 0;
   const context = {
     console,
+    setTimeout: (callback) => {
+      callback();
+      return 0;
+    },
     document: {
       getElementById: (id) => elements[id],
-      querySelectorAll: (selector) => (selector === '.app-menu-tile' ? tiles : []),
+      querySelectorAll: (selector) => (selector === '.app-menu-item' ? menuItems : []),
     },
     window: {
       addEventListener() {},
+      confirm: () => true,
       tvAPI: {
         ensureLampa: () => lampaReady,
+        clearCache: async () => {
+          clearCacheCalls += 1;
+          return { ok: true, removed: 3 };
+        },
         onAppMenuToggle() {},
         quit: async () => {},
         restart: async () => {},
@@ -106,12 +121,16 @@ function createRendererHarness() {
 
   const rendererPath = path.join(__dirname, '..', 'renderer.js');
   const source = `${fs.readFileSync(rendererPath, 'utf8')}\n` +
-    'globalThis.__renderer = { apps, switchApp, get activeAppId() { return activeAppId; } };';
+    'globalThis.__renderer = { apps, clearCacheFromMenu, switchApp, get activeAppId() { return activeAppId; } };';
   vm.runInNewContext(source, context, { filename: rendererPath });
 
   return {
     apps: context.__renderer.apps,
+    clearCacheFromMenu: context.__renderer.clearCacheFromMenu,
     elements,
+    get clearCacheCalls() {
+      return clearCacheCalls;
+    },
     resolveLampa,
     switchApp: context.__renderer.switchApp,
   };
@@ -143,4 +162,20 @@ test('late Lampa startup does not open a hidden webview after switching away', a
   assert.equal(harness.apps.lampa.loaded, false);
   assert.equal(harness.elements.lampaWebview.stopCalls, 0);
   assert.deepEqual(harness.elements.lampaWebview.loadedUrls, []);
+});
+
+test('cache cleanup closes webviews before clearing and reloads active app', async () => {
+  const harness = createRendererHarness();
+
+  harness.switchApp('kinopoisk');
+  await harness.clearCacheFromMenu();
+
+  assert.equal(harness.clearCacheCalls, 1);
+  assert.equal(harness.elements.kinopoiskWebview.stopCalls, 1);
+  assert.deepEqual(harness.elements.kinopoiskWebview.loadedUrls, [
+    'https://hd.kinopoisk.ru/',
+    'about:blank',
+    'https://hd.kinopoisk.ru/',
+  ]);
+  assert.equal(harness.elements.statusText.textContent, 'Открываем Кинопоиск...');
 });

@@ -148,6 +148,11 @@ button {
   color: #1d1300;
 }
 
+.app-menu-icon-cache {
+  background: #263548;
+  color: #45c2b3;
+}
+
 .app-menu-name {
   font-size: 24px;
   line-height: 1.2;
