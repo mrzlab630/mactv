@@ -76,6 +76,104 @@ button {
   cursor: pointer;
 }
 
+.startup-help {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.76);
+}
+
+.startup-help-panel {
+  width: min(680px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px;
+  overflow: auto;
+  background: #111822;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55);
+}
+
+.startup-help-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.startup-help-title {
+  color: #eef4ff;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.startup-help-close {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  flex: 0 0 auto;
+  background: #263548;
+  color: #dfe7f2;
+  font-size: 26px;
+  line-height: 1;
+}
+
+.startup-help-list {
+  display: grid;
+  gap: 10px;
+}
+
+.startup-help-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  min-height: 52px;
+  padding: 12px 14px;
+  background: #172232;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+.startup-help-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.startup-help-key {
+  min-width: 42px;
+  padding: 7px 10px;
+  color: #101820;
+  background: #45c2b3;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 800;
+  text-align: center;
+  line-height: 1;
+}
+
+.startup-help-action {
+  color: #dfe7f2;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.startup-help-ok {
+  align-self: flex-end;
+  min-width: 128px;
+  background: #45c2b3;
+  color: #081015;
+}
+
 .app-menu {
   position: fixed;
   inset: 0;
@@ -156,6 +254,21 @@ button {
 .app-menu-name {
   font-size: 24px;
   line-height: 1.2;
+}
+
+@media (max-width: 620px) {
+  .startup-help-panel {
+    padding: 18px;
+  }
+
+  .startup-help-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .startup-help-title {
+    font-size: 22px;
+  }
 }
 
 @keyframes spin {

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, powerSaveBlocker, screen, session, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, powerSaveBlocker, screen, session, globalShortcut, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { ensureManagedServiceRunning, stopManagedService } = require('./managed-service');
@@ -15,13 +15,15 @@ if (disableGpuAcceleration) {
 }
 
 let mainWindow;
+let tray = null;
 let blockerId = null;
 let torrServerRuntime = null;
 let cleanupInProgress = false;
+let isQuitting = false;
 
 const userDataRoot = path.join(app.getPath('home'), '.openclaw', 'workspace', '.tv-electron-mvp-user-data');
 app.setPath('userData', userDataRoot);
-cleanObsoleteProfileData(userDataRoot);
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 const localAppsDir = path.join(app.getPath('home'), '.openclaw', 'workspace', '.tv-local-apps');
 const localLampaDir = path.join(localAppsDir, 'lampa');
@@ -36,10 +38,51 @@ const shortcutLogFile = path.join(userDataRoot, 'shortcut-events.log');
 const viewerLogFile = path.join(userDataRoot, 'viewer-events.log');
 const windowModeFile = path.join(userDataRoot, 'window-mode.json');
 const DEBUG_SHORTCUTS = false;
+const ALWAYS_LOG_EVENT_PREFIXES = [
+  'app-',
+  'global-shortcut-register',
+  'tray-',
+  'window-',
+  'hide-main-window',
+  'show-main-window',
+];
 
 function getResourcePath(...segments) {
   if (app.isPackaged) return path.join(process.resourcesPath, ...segments);
   return path.join(__dirname, ...segments);
+}
+
+function getAppAssetPath(...segments) {
+  return path.join(__dirname, 'assets', ...segments);
+}
+
+function getWindowIconPath() {
+  const candidates = [
+    getAppAssetPath('icon.icns'),
+    getAppAssetPath('icon-1024.png'),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate));
+}
+
+function getTrayIcon() {
+  const candidates = [
+    getAppAssetPath('icon.iconset', process.platform === 'darwin' ? 'icon_16x16@2x.png' : 'icon_32x32.png'),
+    getAppAssetPath('icon.iconset', 'icon_32x32.png'),
+    getAppAssetPath('icon-1024.png'),
+    getWindowIconPath(),
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    const image = nativeImage.createFromPath(candidate);
+    if (image.isEmpty()) continue;
+
+    const size = process.platform === 'darwin' ? 18 : 24;
+    const resized = image.resize({ width: size, height: size });
+    if (process.platform === 'darwin') resized.setTemplateImage(true);
+    return resized;
+  }
+
+  return nativeImage.createEmpty();
 }
 
 function getLocalLampaService() {
@@ -117,6 +160,92 @@ function getWindowDebugState(win) {
   };
 }
 
+function updateTrayMenu() {
+  if (!tray) return;
+  const hasVisibleWindow = Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized());
+  const fullscreen = readWindowMode().fullscreen !== false;
+  const menu = Menu.buildFromTemplate([
+    {
+      label: hasVisibleWindow ? 'Свернуть в иконку' : 'Показать окно',
+      click: () => {
+        if (hasVisibleWindow) hideMainWindowToTray({ source: 'tray-menu' });
+        else showMainWindow({ source: 'tray-menu' });
+      },
+    },
+    {
+      label: fullscreen ? 'Оконный режим' : 'На весь экран',
+      click: () => toggleFullscreenMode({ source: 'tray-menu' }),
+    },
+    { type: 'separator' },
+    { label: 'Перезапустить', click: () => relaunchApp() },
+    {
+      label: 'Выход',
+      click: () => {
+        isQuitting = true;
+        shutdownOwnedServices();
+        app.quit();
+      },
+    },
+  ]);
+  tray.setContextMenu(menu);
+}
+
+function createTray() {
+  if (tray) return tray;
+
+  const icon = getTrayIcon();
+  if (icon.isEmpty()) {
+    appendShortcutLog('tray-create-empty-icon', {});
+    return null;
+  }
+
+  tray = new Tray(icon);
+  tray.setToolTip('Lampa Wrapper');
+  tray.on('click', () => showMainWindow({ source: 'tray-click' }));
+  tray.on('right-click', () => {
+    updateTrayMenu();
+    tray.popUpContextMenu();
+  });
+  updateTrayMenu();
+  appendShortcutLog('tray-create', {});
+  return tray;
+}
+
+function showMainWindow(logContext = {}) {
+  appendShortcutLog('show-main-window:start', { ...logContext, ...getWindowDebugState(mainWindow) });
+
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+  }
+
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  if (!mainWindow.isVisible()) mainWindow.show();
+  restoreUsableWindowedBounds(mainWindow, logContext);
+  if (process.platform === 'darwin') app.dock?.show();
+
+  if (typeof mainWindow.moveTop === 'function') mainWindow.moveTop();
+  mainWindow.focus();
+  app.focus({ steal: true });
+
+  if (readWindowMode().fullscreen !== false && !mainWindow.isFullScreen()) {
+    setTimeout(() => applyFullscreenState(mainWindow, true), 50);
+  }
+
+  updateTrayMenu();
+  appendShortcutLog('show-main-window:end', { ...logContext, ...getWindowDebugState(mainWindow) });
+}
+
+function hideMainWindowToTray(logContext = {}) {
+  appendShortcutLog('hide-main-window:start', { ...logContext, ...getWindowDebugState(mainWindow) });
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  mainWindow.hide();
+  updateTrayMenu();
+  appendShortcutLog('hide-main-window:end', { ...logContext, ...getWindowDebugState(mainWindow) });
+}
+
 function applyFullscreenState(win, fullscreen) {
   if (!win) return;
   appendShortcutLog('apply-fullscreen-state:before', { requested: fullscreen, ...getWindowDebugState(win) });
@@ -133,10 +262,11 @@ function applyFullscreenState(win, fullscreen) {
     win.focus();
   }
   appendShortcutLog('apply-fullscreen-state:after', { requested: fullscreen, ...getWindowDebugState(win) });
+  updateTrayMenu();
 }
 
 function appendShortcutLog(event, payload = {}) {
-  if (!DEBUG_SHORTCUTS && !String(event).startsWith('global-shortcut-register')) return;
+  if (!DEBUG_SHORTCUTS && !ALWAYS_LOG_EVENT_PREFIXES.some((prefix) => String(event).startsWith(prefix))) return;
   appendJsonLog(shortcutLogFile, { event, ...payload });
 }
 
@@ -185,11 +315,13 @@ function shutdownOwnedServices() {
 }
 
 function quitImmediately(code = 0) {
+  isQuitting = true;
   shutdownOwnedServices();
   app.exit(code);
 }
 
 function relaunchApp() {
+  isQuitting = true;
   shutdownOwnedServices();
   app.relaunch();
   app.exit(0);
@@ -238,6 +370,29 @@ function getWindowedBounds() {
   };
 }
 
+function boundsIntersect(first, second) {
+  return first.x < second.x + second.width &&
+    first.x + first.width > second.x &&
+    first.y < second.y + second.height &&
+    first.y + first.height > second.y;
+}
+
+function hasUsableWindowedBounds(bounds) {
+  if (!bounds || bounds.width < 640 || bounds.height < 360) return false;
+  return screen.getAllDisplays().some((display) => boundsIntersect(bounds, display.workArea));
+}
+
+function restoreUsableWindowedBounds(win, logContext = {}) {
+  if (!win || win.isDestroyed() || readWindowMode().fullscreen !== false) return;
+
+  const currentBounds = win.getBounds();
+  if (hasUsableWindowedBounds(currentBounds)) return;
+
+  const nextBounds = getWindowedBounds();
+  appendShortcutLog('window-reset-bounds', { ...logContext, currentBounds, nextBounds });
+  win.setBounds(nextBounds);
+}
+
 function createWindow() {
   fs.mkdirSync(app.getPath('userData'), { recursive: true });
   const display = getPreferredDisplay();
@@ -252,6 +407,9 @@ function createWindow() {
     y: bounds.y,
     width: bounds.width,
     height: bounds.height,
+    minWidth: 640,
+    minHeight: 360,
+    icon: getWindowIconPath(),
     show: true,
     frame: !fullscreen,
     autoHideMenuBar: fullscreen,
@@ -288,90 +446,122 @@ function createWindow() {
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   if (fullscreen) setTimeout(() => applyFullscreenState(mainWindow, true), 300);
   else {
-    mainWindow.setBounds(getWindowedBounds());
+    restoreUsableWindowedBounds(mainWindow, { source: 'create-window' });
     mainWindow.show();
     mainWindow.focus();
   }
   mainWindow.on('leave-full-screen', () => {
     appendShortcutLog('window-leave-full-screen', { ...getWindowDebugState(mainWindow) });
+    updateTrayMenu();
+  });
+  mainWindow.on('minimize', (event) => {
+    if (!tray || isQuitting) return;
+    event.preventDefault();
+    hideMainWindowToTray({ source: 'window-minimize' });
+  });
+  mainWindow.on('close', (event) => {
+    if (!tray || isQuitting) return;
+    event.preventDefault();
+    hideMainWindowToTray({ source: 'window-close' });
   });
   mainWindow.on('closed', () => {
     mainWindow = null;
+    updateTrayMenu();
   });
 
   if (blockerId === null || !powerSaveBlocker.isStarted(blockerId)) {
     blockerId = powerSaveBlocker.start('prevent-display-sleep');
   }
+
+  updateTrayMenu();
 }
 
-app.whenReady().then(() => {
-  ensureLocalLampaRunning();
-  ensureTorrServerRunning();
-  createWindow();
+function startApp() {
+  cleanObsoleteProfileData(userDataRoot);
 
-  registerGlobalShortcuts();
+  app.on('second-instance', () => {
+    appendShortcutLog('app-second-instance', { ...getWindowDebugState(mainWindow) });
+    showMainWindow({ source: 'second-instance' });
+  });
 
-  ipcMain.handle('lampa:ensure-running', () => ensureLocalLampaRunning());
-  ipcMain.handle('app:get-shortcut-log-file', () => shortcutLogFile);
-  ipcMain.handle('app:go-home', () => {
-    if (mainWindow) mainWindow.loadFile('index.html');
-    return { ok: true };
+  app.whenReady().then(() => {
+    ensureLocalLampaRunning();
+    ensureTorrServerRunning();
+    createTray();
+    createWindow();
+
+    registerGlobalShortcuts();
+
+    ipcMain.handle('lampa:ensure-running', () => ensureLocalLampaRunning());
+    ipcMain.handle('app:get-shortcut-log-file', () => shortcutLogFile);
+    ipcMain.handle('app:go-home', () => {
+      if (mainWindow) mainWindow.loadFile('index.html');
+      return { ok: true };
+    });
+    ipcMain.handle('viewer:log-event', (_event, payload = {}) => {
+      appendJsonLog(viewerLogFile, payload);
+      return { ok: true };
+    });
+    ipcMain.handle('app:restart', () => {
+      relaunchApp();
+    });
+    ipcMain.handle('app:quit', () => {
+      isQuitting = true;
+      shutdownOwnedServices();
+      app.quit();
+    });
+    ipcMain.handle('app:toggle-fullscreen', () => {
+      return toggleFullscreenMode({ source: 'ipc' });
+    });
+    ipcMain.handle('app:clear-cache', async () => {
+      if (cleanupInProgress) {
+        return { ok: false, reason: 'cleanup-in-progress', removed: 0, errors: [] };
+      }
+
+      cleanupInProgress = true;
+      try {
+        await Promise.all(browserPartitions.map((partition) => session.fromPartition(partition).clearCache()));
+        const results = cleanObsoleteProfileData(userDataRoot);
+        const errors = results.filter((result) => result.error);
+        return {
+          ok: errors.length === 0,
+          clearedPartitions: browserPartitions.length,
+          removed: results.filter((result) => result.removed).length,
+          errors,
+        };
+      } finally {
+        cleanupInProgress = false;
+      }
+    });
+
+    app.on('activate', () => {
+      showMainWindow({ source: 'app-activate' });
+    });
   });
-  ipcMain.handle('viewer:log-event', (_event, payload = {}) => {
-    appendJsonLog(viewerLogFile, payload);
-    return { ok: true };
-  });
-  ipcMain.handle('app:restart', () => {
-    relaunchApp();
-  });
-  ipcMain.handle('app:quit', () => {
+
+  app.on('before-quit', () => {
+    isQuitting = true;
+    appendShortcutLog('app-before-quit', { ...getWindowDebugState(mainWindow) });
     shutdownOwnedServices();
-    app.quit();
   });
-  ipcMain.handle('app:toggle-fullscreen', () => {
-    return toggleFullscreenMode({ source: 'ipc' });
+
+  app.on('will-quit', () => {
+    appendShortcutLog('app-will-quit', {});
+    shutdownOwnedServices();
+    globalShortcut.unregisterAll();
   });
-  ipcMain.handle('app:clear-cache', async () => {
-    if (cleanupInProgress) {
-      return { ok: false, reason: 'cleanup-in-progress', removed: 0, errors: [] };
+
+  app.on('window-all-closed', () => {
+    if (blockerId !== null && powerSaveBlocker.isStarted(blockerId)) {
+      powerSaveBlocker.stop(blockerId);
+      blockerId = null;
     }
-
-    cleanupInProgress = true;
-    try {
-      await Promise.all(browserPartitions.map((partition) => session.fromPartition(partition).clearCache()));
-      const results = cleanObsoleteProfileData(userDataRoot);
-      const errors = results.filter((result) => result.error);
-      return {
-        ok: errors.length === 0,
-        clearedPartitions: browserPartitions.length,
-        removed: results.filter((result) => result.removed).length,
-        errors,
-      };
-    } finally {
-      cleanupInProgress = false;
-    }
+    if (process.platform !== 'darwin') app.quit();
   });
+}
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
-});
-
-app.on('before-quit', () => {
-  appendShortcutLog('app-before-quit', { ...getWindowDebugState(mainWindow) });
-  shutdownOwnedServices();
-});
-
-app.on('will-quit', () => {
-  appendShortcutLog('app-will-quit', {});
-  shutdownOwnedServices();
-  globalShortcut.unregisterAll();
-});
-
-app.on('window-all-closed', () => {
-  if (blockerId !== null && powerSaveBlocker.isStarted(blockerId)) {
-    powerSaveBlocker.stop(blockerId);
-    blockerId = null;
-  }
-  if (process.platform !== 'darwin') app.quit();
-});
+if (!gotSingleInstanceLock) {
+  app.exit(0);
+} else {
+  startApp();
+}

@@ -25,6 +25,17 @@
   <webview id="youtubeWebview" class="webview hidden" allowpopups partition="persist:youtube"></webview>
   <webview id="kinopoiskWebview" class="webview hidden" allowpopups partition="persist:kinopoisk"></webview>
 
+  <div id="startupHelp" class="startup-help" role="dialog" aria-modal="true" aria-labelledby="startupHelpTitle">
+    <div class="startup-help-panel">
+      <div class="startup-help-header">
+        <div id="startupHelpTitle" class="startup-help-title">Горячие клавиши</div>
+        <button id="startupHelpCloseBtn" class="startup-help-close" aria-label="Закрыть">×</button>
+      </div>
+      <div id="startupHelpList" class="startup-help-list" aria-label="Список горячих клавиш"></div>
+      <button id="startupHelpOkBtn" class="startup-help-ok">Понятно</button>
+    </div>
+  </div>
+
   <div id="appMenu" class="app-menu hidden" aria-hidden="true">
     <div class="app-menu-panel" role="dialog" aria-modal="true">
       <div class="app-menu-grid" role="listbox" aria-label="Выбор приложения">

@@ -14,7 +14,11 @@ const retryBtn = document.getElementById('retryBtn');
 const restartBtn = document.getElementById('restartBtn');
 const appMenu = document.getElementById('appMenu');
 const appMenuItems = Array.from(document.querySelectorAll('.app-menu-item'));
-const { ACTIONS, getShortcutAction } = window.tvShortcuts;
+const startupHelp = document.getElementById('startupHelp');
+const startupHelpList = document.getElementById('startupHelpList');
+const startupHelpCloseBtn = document.getElementById('startupHelpCloseBtn');
+const startupHelpOkBtn = document.getElementById('startupHelpOkBtn');
+const { ACTIONS, getShortcutAction, getAcceleratorsForAction } = window.tvShortcuts;
 
 const apps = {
   lampa: {
@@ -47,6 +51,40 @@ let selectedMenuIndex = 0;
 let lastMenuToggleAt = 0;
 let cacheClearInProgress = false;
 const MENU_COLUMNS = 2;
+
+const STARTUP_HELP_ACTIONS = [
+  {
+    action: ACTIONS.TOGGLE_APP_MENU,
+    fallbackKeys: ['F8', 'Shift+8'],
+    label: 'Открыть или закрыть панель приложений',
+  },
+  {
+    action: ACTIONS.QUIT,
+    fallbackKeys: ['F9', 'Shift+9'],
+    label: 'Выйти из приложения',
+  },
+  {
+    action: ACTIONS.TOGGLE_FULLSCREEN,
+    fallbackKeys: ['F10', 'Shift+0'],
+    label: 'Переключить полноэкранный режим',
+  },
+  {
+    keys: ['F5'],
+    label: 'Перезагрузить текущую страницу',
+  },
+  {
+    keys: ['↑', '↓', '←', '→'],
+    label: 'Перемещаться по панели приложений',
+  },
+  {
+    keys: ['Enter'],
+    label: 'Выбрать пункт в панели приложений',
+  },
+  {
+    keys: ['Esc'],
+    label: 'Закрыть панель или этот попап',
+  },
+];
 
 function activeApp() {
   return apps[activeAppId];
@@ -110,6 +148,61 @@ function closeAllAppPages() {
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function getHelpKeys(item) {
+  if (item.keys) return item.keys;
+  if (typeof getAcceleratorsForAction !== 'function') return item.fallbackKeys;
+  const accelerators = getAcceleratorsForAction(item.action);
+  return accelerators.length ? accelerators : item.fallbackKeys;
+}
+
+function renderStartupHelp() {
+  if (!startupHelpList) return;
+  startupHelpList.innerHTML = STARTUP_HELP_ACTIONS.map((item) => {
+    const keys = getHelpKeys(item)
+      .map((key) => `<span class="startup-help-key">${escapeHtml(key)}</span>`)
+      .join('');
+    return `
+      <div class="startup-help-row">
+        <div class="startup-help-keys">${keys}</div>
+        <div class="startup-help-action">${escapeHtml(item.label)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function isStartupHelpOpen() {
+  return Boolean(startupHelp && !startupHelp.classList.contains('hidden'));
+}
+
+function closeStartupHelp() {
+  if (!startupHelp) return;
+  startupHelp.classList.add('hidden');
+  startupHelp.setAttribute('aria-hidden', 'true');
+  try { activeApp().webview.focus(); } catch {}
+}
+
+function handleStartupHelpKey(e) {
+  if (!isStartupHelpOpen()) return false;
+
+  if (['Escape', 'Enter', ' '].includes(e.key)) {
+    e.preventDefault();
+    e.stopPropagation();
+    closeStartupHelp();
+    return true;
+  }
+
+  return false;
 }
 
 async function bootLampa() {
@@ -356,10 +449,22 @@ function logKeyEvent(kind, e) {
   console.log(`[shortcut] ${kind}`, { key: e.key, code: e.code, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, meta: e.metaKey });
 }
 
-window.tvAPI.onAppMenuToggle(toggleAppMenu);
+renderStartupHelp();
+startupHelpCloseBtn?.addEventListener('click', closeStartupHelp);
+startupHelpOkBtn?.addEventListener('click', closeStartupHelp);
+setTimeout(() => {
+  try { startupHelpOkBtn?.focus(); } catch {}
+}, 0);
+
+window.tvAPI.onAppMenuToggle(() => {
+  if (isStartupHelpOpen()) return;
+  toggleAppMenu();
+});
 
 window.addEventListener('keydown', async (e) => {
   logKeyEvent('keydown', e);
+  if (handleStartupHelpKey(e)) return;
+
   const action = getShortcutAction(e);
 
   if (handleMenuKey(e)) return;
