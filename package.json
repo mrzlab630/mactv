@@ -1,5 +1,5 @@
 {
-  "name": "tv-electron-mvp",
+  "name": "mactv",
   "version": "0.1.0",
   "description": "Lampa fullscreen wrapper for macOS using Electron",
   "main": "main.js",
