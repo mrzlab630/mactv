@@ -33,6 +33,10 @@
     ],
     "extraResources": [
       {
+        "from": "lampa",
+        "to": "lampa"
+      },
+      {
         "from": "TorrServer",
         "to": "TorrServer"
       },

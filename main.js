@@ -25,10 +25,9 @@ const userDataRoot = path.join(app.getPath('home'), '.openclaw', 'workspace', '.
 app.setPath('userData', userDataRoot);
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
-const localAppsDir = path.join(app.getPath('home'), '.openclaw', 'workspace', '.tv-local-apps');
-const localLampaDir = path.join(localAppsDir, 'lampa');
-const localLampaPidFile = path.join(localAppsDir, 'lampa-server.pid');
-const localLampaLogFile = path.join(localAppsDir, 'lampa-server.log');
+const localLampaDir = getResourcePath('lampa');
+const localLampaPidFile = path.join(userDataRoot, 'lampa-server.pid');
+const localLampaLogFile = path.join(userDataRoot, 'logs', 'lampa-server.log');
 const localLampaPort = 8099;
 const localLampaUrl = `http://127.0.0.1:${localLampaPort}/`;
 const torrServerPort = 8090;
@@ -90,7 +89,7 @@ function getLocalLampaService() {
     name: 'Lampa',
     command: 'python3',
     args: ['-m', 'http.server', String(localLampaPort), '--directory', localLampaDir],
-    cwd: localAppsDir,
+    cwd: localLampaDir,
     healthUrl: localLampaUrl,
     pidFile: localLampaPidFile,
     logFile: localLampaLogFile,
@@ -126,7 +125,7 @@ function getTorrServerService() {
 }
 
 function ensureLocalLampaRunning() {
-  fs.mkdirSync(localAppsDir, { recursive: true });
+  fs.mkdirSync(userDataRoot, { recursive: true });
   return ensureManagedServiceRunning(getLocalLampaService()).result;
 }
 

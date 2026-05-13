@@ -4,7 +4,7 @@ Electron-приложение для macOS, которое запускает л
 
 ## Что умеет приложение
 
-- Поднимает локальную Lampa из каталога `~/.openclaw/workspace/.tv-local-apps/lampa` на `http://127.0.0.1:8099/`.
+- Поднимает bundled Lampa entrypoint из каталога `lampa/` на `http://127.0.0.1:8099/`.
 - Поднимает bundled `TorrServer` на `http://127.0.0.1:8090/` и останавливает только тот процесс, который запустило само.
 - Открывает Lampa, YouTube и Кинопоиск в отдельных persistent webview-разделах.
 - Даёт ТВ-меню приложений, стартовую подсказку по клавишам, очистку кэша и отдельный оконный/полноэкранный режим.
@@ -24,6 +24,7 @@ Electron-приложение для macOS, которое запускает л
 | `profile-cleanup.js` | Очистка кэшей Electron-профиля без удаления cookies, IndexedDB, Local Storage и других persistent данных. |
 | `viewer.html`, `viewer.js` | Отдельный webview-viewer с кнопками домой/назад/обновить и логированием событий загрузки. |
 | `scripts/autostart.js` | Установка, удаление и проверка LaunchAgent для автозапуска на macOS. |
+| `lampa/` | Bundled entrypoint Lampa. В dev берётся из проекта, в установленном `.app` лежит в `Contents/Resources/lampa`. |
 | `TorrServer` | Bundled бинарник TorrServer для локального torrent/http сервиса. |
 | `bin/v2ray`, `proxy-profiles/`, `proxy-runtime/` | Bundled V2Ray и конфиги proxy. Сейчас эти ресурсы попадают в сборку, но приложение не запускает V2Ray автоматически. |
 | `assets/` | Иконки приложения и tray. |
@@ -36,7 +37,7 @@ Electron-приложение для macOS, которое запускает л
 - Node.js и npm.
 - `python3`: используется для локального HTTP-сервера Lampa.
 - `curl`: используется health-check логикой локальных сервисов.
-- Локальная сборка Lampa с файлом `index.html` в каталоге `~/.openclaw/workspace/.tv-local-apps/lampa`.
+- Каталог `lampa/` с файлом `index.html` в корне проекта.
 
 Bundled бинарники `TorrServer` и `bin/v2ray` сейчас лежат как Mach-O x86_64. На Apple Silicon может понадобиться Rosetta.
 
@@ -46,12 +47,10 @@ Bundled бинарники `TorrServer` и `bin/v2ray` сейчас лежат �
 npm ci
 ```
 
-Подготовьте локальную Lampa:
+Проверьте bundled Lampa entrypoint:
 
 ```sh
-mkdir -p ~/.openclaw/workspace/.tv-local-apps/lampa
-# положите файлы Lampa так, чтобы существовал:
-# ~/.openclaw/workspace/.tv-local-apps/lampa/index.html
+test -f lampa/index.html
 ```
 
 Запуск из исходников:
@@ -78,7 +77,7 @@ npm start -- --disable-gpu-rendering
 npm run build:mac
 ```
 
-Сборка использует `electron-builder` и target `dir`; результат появляется в `dist/`. В package включаются JS/HTML/CSS файлы, иконки, `TorrServer`, `bin/`, `proxy-profiles/` и `proxy-runtime/config.base.json`.
+Сборка использует `electron-builder` и target `dir`; результат появляется в `dist/`. В package включаются JS/HTML/CSS файлы, иконки, `lampa/`, `TorrServer`, `bin/`, `proxy-profiles/` и `proxy-runtime/config.base.json`.
 
 После сборки можно перенести `.app` в `/Applications`, если нужен системный запуск и автозапуск через LaunchAgent.
 
@@ -121,7 +120,7 @@ LaunchAgent хранится в `~/Library/LaunchAgents/com.stepan.lampawrapper.
 При старте приложение:
 
 1. Очищает устаревшие кэши и старый раздел `okko`.
-2. Проверяет локальную Lampa на `127.0.0.1:8099`; если её нет, запускает `python3 -m http.server` из `~/.openclaw/workspace/.tv-local-apps/lampa`.
+2. Проверяет локальную Lampa на `127.0.0.1:8099`; если её нет, запускает `python3 -m http.server` из bundled каталога `lampa/`.
 3. Проверяет TorrServer на `127.0.0.1:8090`; если его нет, запускает bundled `TorrServer`.
 4. Открывает полноэкранное окно с Lampa.
 
@@ -162,12 +161,12 @@ LaunchAgent хранится в `~/Library/LaunchAgents/com.stepan.lampawrapper.
 - `torrserver.pid` - pid запущенного TorrServer, если он был создан приложением.
 - `logs/torrserver*.log` - логи TorrServer.
 
-Локальная Lampa и её pid/log лежат отдельно:
+Bundled Lampa лежит в проекте или в ресурсах установленного приложения, а её pid/log хранятся в runtime-профиле:
 
 ```text
-~/.openclaw/workspace/.tv-local-apps/lampa
-~/.openclaw/workspace/.tv-local-apps/lampa-server.pid
-~/.openclaw/workspace/.tv-local-apps/lampa-server.log
+./lampa
+~/.openclaw/workspace/.tv-electron-mvp-user-data/lampa-server.pid
+~/.openclaw/workspace/.tv-electron-mvp-user-data/logs/lampa-server.log
 ```
 
 ## Тесты
@@ -185,7 +184,7 @@ npm test
 
 ## Диагностика
 
-- `Lampa недоступна: missing-files` означает, что не найден `~/.openclaw/workspace/.tv-local-apps/lampa/index.html`.
+- `Lampa недоступна: missing-files` означает, что не найден `lampa/index.html` в dev или `Contents/Resources/lampa/index.html` в установленном приложении.
 - Если Lampa или TorrServer не стартуют, проверьте, не заняты ли порты `8099` и `8090`.
 - Если окно не открывается корректно на внешнем дисплее, переключите режим `F10`/`Shift+0`; приложение сбрасывает непригодные оконные bounds.
 - Если webview ведёт себя нестабильно после обновлений Electron, используйте `Очистить кэш` в меню приложений.
