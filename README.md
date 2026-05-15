@@ -8,6 +8,8 @@ Electron-приложение для macOS, которое запускает л
 - Поднимает bundled `TorrServer` на `http://127.0.0.1:8090/` и останавливает только тот процесс, который запустило само.
 - Открывает Lampa, YouTube и Кинопоиск в отдельных persistent webview-разделах.
 - Даёт ТВ-меню приложений, стартовую подсказку по клавишам, очистку кэша и отдельный оконный/полноэкранный режим.
+- Для torrent-воспроизведения в Lampa на macOS автоматически переключает `player_torrent` на IINA, если установлен `/Applications/IINA.app`.
+- При открытии torrent-потока во внешнем IINA временно скрывает окно обертки, активирует IINA поверх остальных окон и возвращает обертку после закрытия окна IINA.
 - Работает как single-instance приложение: повторный запуск показывает уже открытое окно.
 - Создаёт tray-иконку с командами показать/скрыть окно, переключить fullscreen, перезапустить и выйти.
 - Может поставить macOS LaunchAgent для автозапуска.
@@ -20,6 +22,7 @@ Electron-приложение для macOS, которое запускает л
 | `index.html`, `renderer.js`, `styles.css` | Основной ТВ-интерфейс: webview-приложения, меню выбора, стартовая справка, перезагрузка и очистка кэша. |
 | `preload.js` | Безопасный bridge между renderer и main process через `contextBridge`. |
 | `shortcuts.js` | Общая карта действий и горячих клавиш для renderer и Electron `globalShortcut`. |
+| `external-protocols.js` | Whitelist внешних плеерных URL-схем Lampa и разбор `iina://weblink?...` в исходный media URL. |
 | `managed-service.js` | Универсальный запуск локального сервиса: проверка файлов, health-check через HTTP, pid-файл, лог, остановка owned process group. |
 | `profile-cleanup.js` | Очистка кэшей Electron-профиля без удаления cookies, IndexedDB, Local Storage и других persistent данных. |
 | `viewer.html`, `viewer.js` | Отдельный webview-viewer с кнопками домой/назад/обновить и логированием событий загрузки. |
@@ -38,6 +41,7 @@ Electron-приложение для macOS, которое запускает л
 - `python3`: используется для локального HTTP-сервера Lampa.
 - `curl`: используется health-check логикой локальных сервисов.
 - Каталог `lampa/` с файлом `index.html` в корне проекта.
+- IINA в `/Applications/IINA.app`: опционально, но рекомендуется для torrent-релизов с AC3/DTS/HEVC/MKV, которые встроенный Chromium-плеер Electron может воспроизводить без звука или без переключения аудиодорожек.
 
 Bundled бинарники `TorrServer` и `bin/v2ray` сейчас лежат как Mach-O x86_64. На Apple Silicon может понадобиться Rosetta.
 
@@ -122,7 +126,16 @@ LaunchAgent хранится в `~/Library/LaunchAgents/com.stepan.lampawrapper.
 1. Очищает устаревшие кэши и старый раздел `okko`.
 2. Проверяет локальную Lampa на `127.0.0.1:8099`; если её нет, запускает `python3 -m http.server` из bundled каталога `lampa/`.
 3. Проверяет TorrServer на `127.0.0.1:8090`; если его нет, запускает bundled `TorrServer`.
-4. Открывает полноэкранное окно с Lampa.
+4. Открывает визуально полноэкранное окно с Lampa.
+
+На macOS полноэкранный режим обертки сделан через `simpleFullscreen`, а не через native fullscreen Space. Это нужно, чтобы внешний IINA мог открываться поверх приложения, а пользователь после закрытия IINA возвращался в Lampa.
+
+Torrent-воспроизведение в Lampa:
+
+- Если установлен IINA и в Lampa для торрентов был выбран `inner`/`lampa`, приложение автоматически ставит `player_torrent = iina`.
+- Когда Lampa открывает `iina://weblink?...`, Electron перехватывает URL, извлекает исходный TorrServer HTTP URL и запускает его через IINA.
+- Перед запуском IINA окно обертки скрывается, чтобы IINA гарантированно оказалось верхним окном.
+- После закрытия окна IINA или завершения процесса IINA обертка автоматически показывается снова.
 
 Горячие клавиши:
 
@@ -157,6 +170,7 @@ LaunchAgent хранится в `~/Library/LaunchAgents/com.stepan.lampawrapper.
 
 - `window-mode.json` - сохранённый режим окна.
 - `shortcut-events.log` - служебные события приложения, tray и горячих клавиш.
+- `external-player-*` события в `shortcut-events.log` - запуск внешнего плеера, скрытие/возврат обертки, активация IINA.
 - `viewer-events.log` - события загрузки отдельного viewer.
 - `torrserver.pid` - pid запущенного TorrServer, если он был создан приложением.
 - `logs/torrserver*.log` - логи TorrServer.
@@ -187,5 +201,8 @@ npm test
 - `Lampa недоступна: missing-files` означает, что не найден `lampa/index.html` в dev или `Contents/Resources/lampa/index.html` в установленном приложении.
 - Если Lampa или TorrServer не стартуют, проверьте, не заняты ли порты `8099` и `8090`.
 - Если окно не открывается корректно на внешнем дисплее, переключите режим `F10`/`Shift+0`; приложение сбрасывает непригодные оконные bounds.
+- Если torrent в Lampa идет без звука, проверьте кодек аудио. AC3/DTS в MKV часто не декодируются встроенным Chromium-плеером Electron; используйте IINA как внешний плеер.
+- Если IINA не открывается поверх обертки, проверьте, что установлена текущая сборка с событиями `external-player-hide-wrapper` и `external-player-activate` в `shortcut-events.log`.
+- Если обертка не возвращается после закрытия окна IINA, завершите IINA полностью или разрешите приложению управление через macOS Privacy & Security для Automation/Accessibility, чтобы AppleScript мог видеть окна IINA.
 - Если webview ведёт себя нестабильно после обновлений Electron, используйте `Очистить кэш` в меню приложений.
 - Для проблем рендера попробуйте запуск с `TV_ELECTRON_DISABLE_GPU=1`.
