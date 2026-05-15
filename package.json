@@ -26,6 +26,7 @@
       "viewer.html",
       "renderer.js",
       "viewer.js",
+      "external-protocols.js",
       "shortcuts.js",
       "managed-service.js",
       "styles.css",

@@ -1,9 +1,10 @@
-const { app, BrowserWindow, ipcMain, powerSaveBlocker, screen, session, globalShortcut, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, powerSaveBlocker, screen, session, globalShortcut, Tray, Menu, nativeImage, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { ensureManagedServiceRunning, stopManagedService } = require('./managed-service');
 const { cleanObsoleteProfileData } = require('./profile-cleanup');
 const { ACTIONS, GLOBAL_SHORTCUTS } = require('./shortcuts');
+const { isExternalPlayerUrl } = require('./external-protocols');
 
 const disableGpuAcceleration = process.env.TV_ELECTRON_DISABLE_GPU === '1'
   || process.argv.includes('--disable-gpu-rendering');
@@ -40,6 +41,7 @@ const DEBUG_SHORTCUTS = false;
 const ALWAYS_LOG_EVENT_PREFIXES = [
   'app-',
   'global-shortcut-register',
+  'external-player-',
   'tray-',
   'window-',
   'hide-main-window',
@@ -276,6 +278,43 @@ function appendJsonLog(file, payload = {}) {
   } catch {}
 }
 
+function openExternalPlayerUrl(rawUrl, source = 'unknown') {
+  if (!isExternalPlayerUrl(rawUrl)) return false;
+
+  appendShortcutLog('external-player-open', { source, url: rawUrl });
+  shell.openExternal(rawUrl).catch((error) => {
+    appendShortcutLog('external-player-open-failed', {
+      source,
+      url: rawUrl,
+      error: String(error?.message || error),
+    });
+  });
+
+  return true;
+}
+
+function getNavigationUrl(detailsOrUrl) {
+  if (typeof detailsOrUrl === 'string') return detailsOrUrl;
+  return detailsOrUrl?.url || '';
+}
+
+function attachExternalPlayerHandlers(contents) {
+  contents.on('will-navigate', (event, url) => {
+    if (openExternalPlayerUrl(url, 'will-navigate')) event.preventDefault();
+  });
+
+  contents.on('will-frame-navigate', (event, details) => {
+    if (openExternalPlayerUrl(getNavigationUrl(details), 'will-frame-navigate')) event.preventDefault();
+  });
+
+  if (typeof contents.setWindowOpenHandler === 'function') {
+    contents.setWindowOpenHandler(({ url }) => {
+      if (openExternalPlayerUrl(url, 'window-open')) return { action: 'deny' };
+      return { action: 'allow' };
+    });
+  }
+}
+
 function readWindowMode() {
   try {
     if (fs.existsSync(windowModeFile)) {
@@ -477,6 +516,10 @@ function createWindow() {
 
 function startApp() {
   cleanObsoleteProfileData(userDataRoot);
+
+  app.on('web-contents-created', (_event, contents) => {
+    attachExternalPlayerHandlers(contents);
+  });
 
   app.on('second-instance', () => {
     appendShortcutLog('app-second-instance', { ...getWindowDebugState(mainWindow) });
