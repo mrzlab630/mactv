@@ -1,10 +1,11 @@
 const { app, BrowserWindow, ipcMain, powerSaveBlocker, screen, session, globalShortcut, Tray, Menu, nativeImage, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
 const { ensureManagedServiceRunning, stopManagedService } = require('./managed-service');
 const { cleanObsoleteProfileData } = require('./profile-cleanup');
 const { ACTIONS, GLOBAL_SHORTCUTS } = require('./shortcuts');
-const { isExternalPlayerUrl } = require('./external-protocols');
+const { getIinaMediaUrl, isExternalPlayerUrl } = require('./external-protocols');
 
 const disableGpuAcceleration = process.env.TV_ELECTRON_DISABLE_GPU === '1'
   || process.argv.includes('--disable-gpu-rendering');
@@ -34,6 +35,7 @@ const localLampaUrl = `http://127.0.0.1:${localLampaPort}/`;
 const torrServerPort = 8090;
 const torrServerUrl = `http://127.0.0.1:${torrServerPort}/`;
 const browserPartitions = ['persist:lampa', 'persist:youtube', 'persist:kinopoisk'];
+const iinaAppPath = '/Applications/IINA.app';
 const shortcutLogFile = path.join(userDataRoot, 'shortcut-events.log');
 const viewerLogFile = path.join(userDataRoot, 'viewer-events.log');
 const windowModeFile = path.join(userDataRoot, 'window-mode.json');
@@ -278,8 +280,57 @@ function appendJsonLog(file, payload = {}) {
   } catch {}
 }
 
+function spawnDetached(command, args, event, payload = {}) {
+  try {
+    const child = spawn(command, args, { detached: true, stdio: 'ignore' });
+
+    child.on('error', (error) => {
+      appendShortcutLog(`${event}-failed`, {
+        ...payload,
+        error: String(error?.message || error),
+      });
+    });
+
+    child.unref();
+    return true;
+  } catch (error) {
+    appendShortcutLog(`${event}-failed`, {
+      ...payload,
+      error: String(error?.message || error),
+    });
+    return false;
+  }
+}
+
+function resumeMacApp(appName, source) {
+  if (process.platform !== 'darwin') return;
+
+  appendShortcutLog('external-player-resume', { source, appName });
+  spawnDetached('/usr/bin/pkill', ['-CONT', '-x', appName], 'external-player-resume', { source, appName });
+}
+
+function openUrlWithMacApp(appName, mediaUrl, source) {
+  appendShortcutLog('external-player-open-app', { source, appName, url: mediaUrl });
+
+  const launched = spawnDetached('/usr/bin/open', ['-a', appName, mediaUrl], 'external-player-open-app', {
+    source,
+    appName,
+    url: mediaUrl,
+  });
+
+  if (launched) setTimeout(() => resumeMacApp(appName, source), 1500);
+
+  return launched;
+}
+
 function openExternalPlayerUrl(rawUrl, source = 'unknown') {
   if (!isExternalPlayerUrl(rawUrl)) return false;
+
+  const iinaMediaUrl = getIinaMediaUrl(rawUrl);
+  if (process.platform === 'darwin' && iinaMediaUrl && fs.existsSync(iinaAppPath)) {
+    openUrlWithMacApp('IINA', iinaMediaUrl, source);
+    return true;
+  }
 
   appendShortcutLog('external-player-open', { source, url: rawUrl });
   shell.openExternal(rawUrl).catch((error) => {
@@ -291,6 +342,89 @@ function openExternalPlayerUrl(rawUrl, source = 'unknown') {
   });
 
   return true;
+}
+
+function isLampaAppUrl(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    return url.hostname === 'lampa.mx' || url.hostname.endsWith('.lampa.mx');
+  } catch {
+    return false;
+  }
+}
+
+function getPreferredLampaTorrentPlayer() {
+  if (process.platform === 'darwin' && fs.existsSync(iinaAppPath)) return 'iina';
+  return '';
+}
+
+function buildLampaTorrentPlayerScript(player) {
+  return `
+(() => {
+  const preferred = ${JSON.stringify(player)};
+  const key = 'player_torrent';
+  const marker = 'tv_electron_default_player_torrent';
+
+  const apply = () => {
+    const storage = window.Lampa && window.Lampa.Storage;
+    const current = storage && typeof storage.field === 'function'
+      ? String(storage.field(key) || '')
+      : String(window.localStorage.getItem(key) || '');
+
+    if (current && current !== 'inner' && current !== 'lampa') {
+      return { changed: false, current };
+    }
+
+    if (storage && typeof storage.set === 'function') storage.set(key, preferred);
+    else window.localStorage.setItem(key, preferred);
+
+    window.localStorage.setItem(marker, preferred);
+    return { changed: true, player: preferred };
+  };
+
+  if (window.Lampa && window.Lampa.Storage) return apply();
+
+  let attempts = 0;
+  const timer = window.setInterval(() => {
+    attempts += 1;
+    if (window.Lampa && window.Lampa.Storage) {
+      window.clearInterval(timer);
+      apply();
+    }
+    else if (attempts >= 80) window.clearInterval(timer);
+  }, 250);
+
+  return { scheduled: true, player: preferred };
+})();
+`;
+}
+
+function configureLampaTorrentPlayer(contents, source) {
+  if (contents.isDestroyed()) return;
+
+  const url = contents.getURL();
+  const preferredPlayer = getPreferredLampaTorrentPlayer();
+  if (!preferredPlayer || !isLampaAppUrl(url)) return;
+
+  contents.executeJavaScript(buildLampaTorrentPlayerScript(preferredPlayer))
+    .then((result) => {
+      if (!result?.changed && !result?.scheduled) return;
+
+      appendShortcutLog('external-player-default', {
+        source,
+        url,
+        player: preferredPlayer,
+        result,
+      });
+    })
+    .catch((error) => {
+      appendShortcutLog('external-player-default-failed', {
+        source,
+        url,
+        player: preferredPlayer,
+        error: String(error?.message || error),
+      });
+    });
 }
 
 function getNavigationUrl(detailsOrUrl) {
@@ -305,6 +439,14 @@ function attachExternalPlayerHandlers(contents) {
 
   contents.on('will-frame-navigate', (event, details) => {
     if (openExternalPlayerUrl(getNavigationUrl(details), 'will-frame-navigate')) event.preventDefault();
+  });
+
+  contents.on('dom-ready', () => {
+    configureLampaTorrentPlayer(contents, 'dom-ready');
+  });
+
+  contents.on('did-finish-load', () => {
+    configureLampaTorrentPlayer(contents, 'did-finish-load');
   });
 
   if (typeof contents.setWindowOpenHandler === 'function') {

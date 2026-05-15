@@ -27,8 +27,20 @@ function isExternalPlayerUrl(rawUrl) {
   return EXTERNAL_PLAYER_PROTOCOLS.has(getUrlProtocol(rawUrl));
 }
 
+function getIinaMediaUrl(rawUrl) {
+  try {
+    const url = new URL(String(rawUrl));
+    if (url.protocol.toLowerCase() !== 'iina:') return '';
+
+    return url.searchParams.get('url') || '';
+  } catch {
+    return '';
+  }
+}
+
 module.exports = {
   EXTERNAL_PLAYER_PROTOCOLS,
+  getIinaMediaUrl,
   getUrlProtocol,
   isExternalPlayerUrl,
 };
